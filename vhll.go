@@ -3,6 +3,8 @@ package vhll
 import (
 	"errors"
 	"math"
+
+	"github.com/spaolacci/murmur3"
 )
 
 var mAlpha = []float64{
@@ -51,26 +53,26 @@ func getVirtualEstimatorSize(physicalLog2m uint) uint {
 }
 
 func getAlphaMM(log2m uint) float64 {
-  m := math.Pow(2, float64(log2m));
+	m := math.Pow(2, float64(log2m))
 
-  var alphaMM float64;
+	var alphaMM float64
 
-  // See the paper.
-  switch log2m {
-  case 4:
-      alphaMM = 0.673 * m * m;
-      break;
-  case 5:
-      alphaMM = 0.697 * m * m;
-      break;
-  case 6:
-      alphaMM = 0.709 * m * m;
-      break;
-  default:
-      alphaMM = (0.7213 / (1 + 1.079 / m)) * m * m;
-  }
+	// See the paper.
+	switch log2m {
+	case 4:
+		alphaMM = 0.673 * m * m
+		break
+	case 5:
+		alphaMM = 0.697 * m * m
+		break
+	case 6:
+		alphaMM = 0.709 * m * m
+		break
+	default:
+		alphaMM = (0.7213 / (1 + 1.079/m)) * m * m
+	}
 
-  return alphaMM;
+	return alphaMM
 }
 
 /*
@@ -83,9 +85,10 @@ type VirtualHyperLogLog struct {
 	physicalAlphaMM float64
 	virtualLog2m    uint
 	virtualM        uint
-	virtualAlphaMM  uint64
+	virtualAlphaMM  float64
 	virtualCa       float64
 	//hll           hll.HyperLogLog
+	murmur murmur3.Hash128
 }
 
 /*
@@ -116,9 +119,36 @@ func New(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error
 	if physicalLog2m < 7 {
 		return nil, errors.New("physicalLog2m needs to be >= 7")
 	}
+
 	vhll.virtualLog2m = getVirtualEstimatorSize(physicalLog2m)
-	//vhll.virtualAlphaMM = getAlphaMM(physicalLog2m)
+	vhll.virtualAlphaMM = getAlphaMM(physicalLog2m)
 	vhll.virtualM = uint(math.Pow(2, float64(vhll.virtualLog2m)))
 	vhll.virtualCa = mAlpha[vhll.virtualLog2m]
+	vhll.murmur = murmur3.New128()
 	return vhll, nil
+}
+
+/*
+Reset ...
+*/
+func (vhll *VirtualHyperLogLog) Reset() {
+	vhll.registers.reset()
+}
+
+/*
+GetRegisterValueDistribution ...
+*/
+func (vhll *VirtualHyperLogLog) GetRegisterValueDistribution(dist []float64) error {
+	if dist == nil || len(dist) < 32 {
+		return errors.New("distribution can't be < 32")
+	}
+	dist = make([]float64, len(dist), len(dist))
+	for i := uint(0); i < vhll.physicalM; i++ {
+		val := vhll.registers.get(i)
+		dist[val]++
+	}
+	for i, val := range dist {
+		dist[i] = val / float64(vhll.virtualM)
+	}
+	return nil
 }
