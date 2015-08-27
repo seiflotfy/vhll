@@ -1,6 +1,9 @@
 package vhll
 
-import "math"
+import (
+	"errors"
+	"math"
+)
 
 var mAlpha = []float64{
 	0,
@@ -43,18 +46,23 @@ func log2m(rsd float64) uint {
 	return uint(math.Log((1.106/rsd)*(1.106/rsd)) / math.Log(2))
 }
 
+func getVirtualEstimatorSize(physicalLog2m uint) uint {
+	return physicalLog2m - 8
+}
+
 /*
 VirtualHyperLogLog ...
 */
 type VirtualHyperLogLog struct {
-	registers       registerSet
+	registers       *registerSet
 	physicalLog2m   uint
 	physicalM       uint
 	physicalAlphaMM float64
-	virtualLog2M    uint
+	virtualLog2m    uint
 	virtualM        uint
 	virtualAlphaMM  uint64
 	virtualCa       float64
+	//hll           hll.HyperLogLog
 }
 
 /*
@@ -76,6 +84,18 @@ func NewForLog2m(log2m uint) (*VirtualHyperLogLog, error) {
 /*
 New ...
 */
-func New(physicalLog2M uint, registerSet *registerSet) (*VirtualHyperLogLog, error) {
-	return nil, nil
+func New(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error) {
+	vhll := &VirtualHyperLogLog{}
+	vhll.registers = registers
+	vhll.physicalLog2m = physicalLog2m
+	vhll.physicalM = uint(math.Pow(2, float64(physicalLog2m)))
+
+	if physicalLog2m < 7 {
+		return nil, errors.New("physicalLog2m needs to be >= 7")
+	}
+	vhll.virtualLog2m = getVirtualEstimatorSize(physicalLog2m)
+	//vhll.virtualAlphaMM = getAlphaMM(physicalLog2m)
+	vhll.virtualM = uint(math.Pow(2, float64(vhll.virtualLog2m)))
+	vhll.virtualCa = mAlpha[vhll.virtualLog2m]
+	return vhll, nil
 }
