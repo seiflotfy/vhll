@@ -50,6 +50,29 @@ func getVirtualEstimatorSize(physicalLog2m uint) uint {
 	return physicalLog2m - 8
 }
 
+func getAlphaMM(log2m uint) float64 {
+  m := math.Pow(2, float64(log2m));
+
+  var alphaMM float64;
+
+  // See the paper.
+  switch log2m {
+  case 4:
+      alphaMM = 0.673 * m * m;
+      break;
+  case 5:
+      alphaMM = 0.697 * m * m;
+      break;
+  case 6:
+      alphaMM = 0.709 * m * m;
+      break;
+  default:
+      alphaMM = (0.7213 / (1 + 1.079 / m)) * m * m;
+  }
+
+  return alphaMM;
+}
+
 /*
 VirtualHyperLogLog ...
 */
