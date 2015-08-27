@@ -154,6 +154,25 @@ func (vhll *VirtualHyperLogLog) GetRegisterValueDistribution(dist []float64) err
 	return nil
 }
 
+/*
+GetRegisterValueDistributionForIdx ...
+*/
+func (vhll *VirtualHyperLogLog) GetRegisterValueDistributionForIdx(counterIdx uint, dist []float64) error {
+	if dist == nil || len(dist) < 32 {
+		return errors.New("distribution can't be < 32")
+	}
+	dist = make([]float64, len(dist), len(dist))
+	for i := uint(0); i < vhll.virtualM; i++ {
+		phyIdx := vhll.physicalRegisterFromVirtualRegister(counterIdx, i)
+		val := vhll.registers.get(phyIdx)
+		dist[val]++
+	}
+	for i, val := range dist {
+		dist[i] = val / float64(vhll.virtualM)
+	}
+	return nil
+}
+
 func (vhll *VirtualHyperLogLog) physicalRegisterFromVirtualRegister(counterIdx uint, virtual uint) uint {
 	n := (counterIdx+13)*104729 + virtual
 	b := make([]byte, 64)
