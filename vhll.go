@@ -1,6 +1,7 @@
 package vhll
 
 import (
+	"encoding/binary"
 	"errors"
 	"math"
 
@@ -151,4 +152,12 @@ func (vhll *VirtualHyperLogLog) GetRegisterValueDistribution(dist []float64) err
 		dist[i] = val / float64(vhll.virtualM)
 	}
 	return nil
+}
+
+func (vhll *VirtualHyperLogLog) physicalRegisterFromVirtualRegister(counterIdx uint, virtual uint) uint {
+	n := (counterIdx+13)*104729 + virtual
+	b := make([]byte, 64)
+	binary.LittleEndian.PutUint64(b, uint64(n))
+	hash := murmur3.Sum64(b)
+	return uint((uint(hash) & 0xFFFFFFFFFFFF) % vhll.physicalM)
 }
