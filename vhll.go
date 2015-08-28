@@ -2,7 +2,6 @@ package vhll
 
 import (
 	"errors"
-	"fmt"
 	"hllpp"
 	"math"
 	"strconv"
@@ -130,7 +129,6 @@ New ...
 func New(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error) {
 	vhll := &VirtualHyperLogLog{}
 	vhll.registers = registers
-	fmt.Println(len(registers.m))
 	vhll.physicalLog2m = physicalLog2m
 	vhll.physicalAlphaMM = getAlphaMM(physicalLog2m)
 	vhll.physicalM = uint(math.Pow(2, float64(physicalLog2m)))
@@ -165,36 +163,32 @@ func (vhll *VirtualHyperLogLog) getPhysicalRegisterFromVirtualRegister(counterId
 }
 
 /*
-OfferHashed ...
+Add ...
 */
-func (vhll *VirtualHyperLogLog) OfferHashed(counterIdx []byte, hashedValue uint64) bool {
-	virtualRegister := hashedValue >> (64 - vhll.virtualLog2m)
-	r := getLeadingZeros(((hashedValue<<vhll.virtualLog2m)|(1<<(vhll.virtualLog2m-1))+1)+1, 32)
-	physicalRegister := vhll.getPhysicalRegisterFromVirtualRegister(counterIdx, uint(virtualRegister))
-	return vhll.registers.updateIfGreater(physicalRegister, r)
-}
-
-/*
-Offer ...
-*/
-func (vhll *VirtualHyperLogLog) Offer(counterIdx []byte, data []byte) bool {
+func (vhll *VirtualHyperLogLog) Add(id []byte, data []byte) bool {
 	vhll.totalCardinality = -1
-	data = append(data, counterIdx...)
+	data = append(data, id...)
 	h1 := spooky.Hash64(data)
 	vhll.totalCardinalityCounter.Add(data)
-	return vhll.OfferHashed(counterIdx, h1)
+	virtualRegister := h1 >> (64 - vhll.virtualLog2m)
+	r := getLeadingZeros(((h1<<vhll.virtualLog2m)|(1<<(vhll.virtualLog2m-1))+1)+1, 32)
+	physicalRegister := vhll.getPhysicalRegisterFromVirtualRegister(id, uint(virtualRegister))
+	return vhll.registers.updateIfGreater(physicalRegister, r)
 }
 
 /*
 GetTotalCardinality ...
 */
 func (vhll *VirtualHyperLogLog) GetTotalCardinality() uint64 {
+	return vhll.totalCardinalityCounter.Count() * 2
+}
+
+func (vhll *VirtualHyperLogLog) getTotalCardinality() uint64 {
 
 	if vhll.totalCardinality >= 0 {
 		return uint64(vhll.totalCardinality)
 	}
-	vhll.totalCardinality = int64(vhll.totalCardinalityCounter.Count()) * 2
-	fmt.Println(">>>> totalCardinality", vhll.totalCardinality)
+	vhll.totalCardinality = int64(vhll.totalCardinalityCounter.Count())
 
 	registerSum := float64(0)
 	count := vhll.registers.Count
@@ -222,10 +216,10 @@ func (vhll *VirtualHyperLogLog) GetTotalCardinality() uint64 {
 }
 
 /*
-GetNoiseMean ...
+getNoiseMean ...
 */
-func (vhll *VirtualHyperLogLog) GetNoiseMean() float64 {
-	nhat := vhll.GetTotalCardinality()
+func (vhll *VirtualHyperLogLog) getNoiseMean() float64 {
+	nhat := vhll.getTotalCardinality()
 	m := vhll.physicalM
 	s := vhll.virtualM
 	return float64(uint(nhat)) * float64(s/m)
@@ -236,7 +230,7 @@ GetCardinality ...
 */
 func (vhll *VirtualHyperLogLog) GetCardinality(counterIdx []byte) float64 {
 
-	physicalCardinality := vhll.GetTotalCardinality()
+	physicalCardinality := vhll.getTotalCardinality()
 	registerSum := float64(0)
 	zeros := float64(0)
 	for j := uint(0); j < vhll.virtualM; j++ {
@@ -253,7 +247,7 @@ func (vhll *VirtualHyperLogLog) GetCardinality(counterIdx []byte) float64 {
 
 	vp := float64(1.0 * vhll.physicalM * vhll.virtualM / (vhll.physicalM - vhll.virtualM))
 	result := float64(0)
-	noiseMean := vhll.GetNoiseMean()
+	noiseMean := vhll.getNoiseMean()
 
 	if vhll.virtualLog2m >= vhll.physicalLog2m-6 {
 		result = float64(round(vp * ((virtualCardinality)/float64(vhll.virtualM) - float64(physicalCardinality/uint64(vhll.physicalM)))))
