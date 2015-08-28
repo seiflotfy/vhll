@@ -91,7 +91,7 @@ func getLeadingZeros(val uint64, max uint32) uint8 {
 }
 
 /*
-VirtualHyperLogLog ...
+VirtualHyperLogLog a Highly Compact Virtual Maximum Likelihood Sketche
 */
 type VirtualHyperLogLog struct {
 	registers               *registerSet
@@ -117,16 +117,16 @@ func NewForRsd(rsd float64) (*VirtualHyperLogLog, error) {
 }
 
 /*
-NewForLog2m ...
+NewForLog2m creates a new VirtualHyperLogLog with a given log2m, which needs to be dividable by 8
 */
 func NewForLog2m(log2m uint) (*VirtualHyperLogLog, error) {
-	return New(log2m, newRegisterSet(uint(math.Pow(2, float64(log2m)))))
+	return new(log2m, newRegisterSet(uint(math.Pow(2, float64(log2m)))))
 }
 
 /*
 New ...
 */
-func New(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error) {
+func new(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error) {
 	vhll := &VirtualHyperLogLog{}
 	vhll.registers = registers
 	vhll.physicalLog2m = physicalLog2m
@@ -149,21 +149,24 @@ func New(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error
 }
 
 /*
-Reset ...
+Reset clears all data from the struct
 */
 func (vhll *VirtualHyperLogLog) Reset() {
+	vhll.totalCardinalityCounter = hllpp.New()
+	vhll.totalCardinality = -1
+	vhll.noiseCorrector = 1
 	vhll.registers.reset()
 }
 
-func (vhll *VirtualHyperLogLog) getPhysicalRegisterFromVirtualRegister(counterIdx []byte, virtual uint) uint {
-	idx := uint(spooky.Hash64(counterIdx))
+func (vhll *VirtualHyperLogLog) getPhysicalRegisterFromVirtualRegister(id []byte, virtual uint) uint {
+	idx := uint(spooky.Hash64(id))
 	n := (idx+13)*104729 + virtual
 	h1 := spooky.Hash64([]byte(strconv.Itoa(int(n))))
 	return uint((uint(h1) & 0xFFFFFFFFFFFF) % vhll.physicalM)
 }
 
 /*
-Add ...
+Add pushes data to the vritual hyperloglog of a flow 'id'
 */
 func (vhll *VirtualHyperLogLog) Add(id []byte, data []byte) bool {
 	vhll.totalCardinality = -1
@@ -177,7 +180,7 @@ func (vhll *VirtualHyperLogLog) Add(id []byte, data []byte) bool {
 }
 
 /*
-GetTotalCardinality ...
+GetTotalCardinality returns cardinality across flows
 */
 func (vhll *VirtualHyperLogLog) GetTotalCardinality() uint64 {
 	return vhll.totalCardinalityCounter.Count() * 2
@@ -215,9 +218,6 @@ func (vhll *VirtualHyperLogLog) getTotalCardinality() uint64 {
 	return uint64(vhll.totalCardinality)
 }
 
-/*
-getNoiseMean ...
-*/
 func (vhll *VirtualHyperLogLog) getNoiseMean() float64 {
 	nhat := vhll.getTotalCardinality()
 	m := vhll.physicalM
@@ -226,15 +226,15 @@ func (vhll *VirtualHyperLogLog) getNoiseMean() float64 {
 }
 
 /*
-GetCardinality ...
+GetCardinality return the cardinality of a flow 'id'
 */
-func (vhll *VirtualHyperLogLog) GetCardinality(counterIdx []byte) float64 {
+func (vhll *VirtualHyperLogLog) GetCardinality(id []byte) float64 {
 
 	physicalCardinality := vhll.getTotalCardinality()
 	registerSum := float64(0)
 	zeros := float64(0)
 	for j := uint(0); j < vhll.virtualM; j++ {
-		phyReg := vhll.getPhysicalRegisterFromVirtualRegister(counterIdx, j)
+		phyReg := vhll.getPhysicalRegisterFromVirtualRegister(id, j)
 		val := vhll.registers.get(phyReg)
 		registerSum += 1.0 / float64(uint(1)<<val)
 		if val == 0 {
