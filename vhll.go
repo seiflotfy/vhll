@@ -179,10 +179,9 @@ GetTotalCardinality returns cardinality across flows
 */
 func (vhll *VirtualHyperLogLog) GetTotalCardinality() uint64 {
 	registerSum := float64(0)
-	count := vhll.registers.Count
-	zeros := 0.0
+	zeros := float64(0)
+	count := vhll.physicalM
 
-	totalCardinalityFromPhySpace := 0
 	for _, val := range vhll.registers.M {
 		registerSum += 1.0 / float64(uint(1)<<val)
 		if val == 0 {
@@ -190,15 +189,16 @@ func (vhll *VirtualHyperLogLog) GetTotalCardinality() uint64 {
 		}
 	}
 
-	estimate := vhll.physicalAlphaMM * (1 / registerSum)
+	estimate := float64(vhll.physicalAlphaMM) * (1 / registerSum)
+	totalCardinalityFromPhySpace := uint64(0)
+
 	if estimate <= (5.0/2.0)*float64(count) {
-		totalCardinalityFromPhySpace = int(round(float64(count) * math.Log(float64(count)/zeros)))
+		totalCardinalityFromPhySpace = uint64(round(float64(count) * math.Log(float64(count)/zeros)))
 	} else {
-		totalCardinalityFromPhySpace = int(round(estimate))
+		totalCardinalityFromPhySpace = uint64(round(estimate))
 	}
 
-	//vhll.noiseCorrector = float64(vhll.totalCardinality) / float64(totalCardinalityFromPhySpace)
-	return uint64(round(float64(totalCardinalityFromPhySpace)))
+	return totalCardinalityFromPhySpace
 }
 
 func (vhll *VirtualHyperLogLog) getNoiseMean() float64 {
