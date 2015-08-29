@@ -2,11 +2,14 @@ package vhll
 
 import (
 	"errors"
-	"hllpp"
 	"math"
 	"strconv"
 
 	"github.com/dgryski/go-spooky"
+)
+
+var (
+	exp32 = math.Pow(2, 32)
 )
 
 var mAlpha = []float64{
@@ -94,17 +97,15 @@ func getLeadingZeros(val uint64, max uint32) uint8 {
 VirtualHyperLogLog a Highly Compact Virtual Maximum Likelihood Sketche
 */
 type VirtualHyperLogLog struct {
-	registers               *registerSet
-	physicalLog2m           uint
-	physicalM               uint
-	physicalAlphaMM         float64
-	virtualLog2m            uint
-	virtualM                uint
-	virtualAlphaMM          float64
-	virtualCa               float64
-	totalCardinalityCounter *hllpp.HLLPP
-	totalCardinality        int64
-	noiseCorrector          float64
+	registers       *registerSet
+	physicalLog2m   uint
+	physicalM       uint
+	physicalAlphaMM float64
+	virtualLog2m    uint
+	virtualM        uint
+	virtualAlphaMM  float64
+	virtualCa       float64
+	noiseCorrector  float64
 }
 
 /*
@@ -142,9 +143,7 @@ func new(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error
 
 	vhll.virtualM = uint(math.Pow(2, float64(vhll.virtualLog2m)))
 	vhll.virtualCa = mAlpha[vhll.virtualLog2m]
-	vhll.totalCardinality = -1
 	vhll.noiseCorrector = 1
-	vhll.totalCardinalityCounter = hllpp.New()
 	return vhll, nil
 }
 
@@ -152,8 +151,6 @@ func new(physicalLog2m uint, registers *registerSet) (*VirtualHyperLogLog, error
 Reset clears all data from the struct
 */
 func (vhll *VirtualHyperLogLog) Reset() {
-	vhll.totalCardinalityCounter = hllpp.New()
-	vhll.totalCardinality = -1
 	vhll.noiseCorrector = 1
 	vhll.registers.reset()
 }
@@ -169,10 +166,8 @@ func (vhll *VirtualHyperLogLog) getPhysicalRegisterFromVirtualRegister(id []byte
 Add pushes data to the vritual hyperloglog of a flow 'id'
 */
 func (vhll *VirtualHyperLogLog) Add(id []byte, data []byte) bool {
-	vhll.totalCardinality = -1
 	data = append(data, id...)
 	h1 := spooky.Hash64(data)
-	vhll.totalCardinalityCounter.Add(data)
 	virtualRegister := h1 >> (64 - vhll.virtualLog2m)
 	r := getLeadingZeros(((h1<<vhll.virtualLog2m)|(1<<(vhll.virtualLog2m-1))+1)+1, 32)
 	physicalRegister := vhll.getPhysicalRegisterFromVirtualRegister(id, uint(virtualRegister))
@@ -183,23 +178,12 @@ func (vhll *VirtualHyperLogLog) Add(id []byte, data []byte) bool {
 GetTotalCardinality returns cardinality across flows
 */
 func (vhll *VirtualHyperLogLog) GetTotalCardinality() uint64 {
-	return vhll.totalCardinalityCounter.Count() * 2
-}
-
-func (vhll *VirtualHyperLogLog) getTotalCardinality() uint64 {
-
-	if vhll.totalCardinality >= 0 {
-		return uint64(vhll.totalCardinality)
-	}
-	vhll.totalCardinality = int64(vhll.totalCardinalityCounter.Count())
-
 	registerSum := float64(0)
 	count := vhll.registers.Count
 	zeros := 0.0
 
 	totalCardinalityFromPhySpace := 0
-	for j := uint(0); j < count; j++ {
-		val := vhll.registers.get(j)
+	for _, val := range vhll.registers.M {
 		registerSum += 1.0 / float64(uint(1)<<val)
 		if val == 0 {
 			zeros++
@@ -213,13 +197,12 @@ func (vhll *VirtualHyperLogLog) getTotalCardinality() uint64 {
 		totalCardinalityFromPhySpace = int(round(estimate))
 	}
 
-	vhll.noiseCorrector = 1.0 * float64(vhll.totalCardinality) / float64(totalCardinalityFromPhySpace)
-	vhll.totalCardinality = int64(round(float64(totalCardinalityFromPhySpace)))
-	return uint64(vhll.totalCardinality)
+	//vhll.noiseCorrector = float64(vhll.totalCardinality) / float64(totalCardinalityFromPhySpace)
+	return uint64(round(float64(totalCardinalityFromPhySpace)))
 }
 
 func (vhll *VirtualHyperLogLog) getNoiseMean() float64 {
-	nhat := vhll.getTotalCardinality()
+	nhat := vhll.GetTotalCardinality()
 	m := vhll.physicalM
 	s := vhll.virtualM
 	return float64(uint(nhat)) * float64(s/m)
@@ -230,7 +213,7 @@ GetCardinality return the cardinality of a flow 'id'
 */
 func (vhll *VirtualHyperLogLog) GetCardinality(id []byte) float64 {
 
-	physicalCardinality := vhll.getTotalCardinality()
+	physicalCardinality := vhll.GetTotalCardinality()
 	registerSum := float64(0)
 	zeros := float64(0)
 	for j := uint(0); j < vhll.virtualM; j++ {
