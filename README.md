@@ -10,7 +10,7 @@ The datastructure takes from the paper (see below) which proposes a new method, 
 
 For details about the algorithm and citations please use this paper for now
 
-["Hyper-Compact Virtual Estimators for Big Network Data Based on Register Sharing" by Zhen Mo, Yan Qiao, Shigang Chen and Tao Li](http://www.cise.ufl.edu/~min/paper/sigmetrics15.pdf)
+["Hyper-Compact Virtual Estimators for Big Network Data Based on Register Sharing" by Qingjun Xiao, Shigang Chen, Min Chen & Yibei Ling](http://www.cise.ufl.edu/~min/paper/sigmetrics15.pdf)
 
 ##Note
 This implementation uses a a static bucket size of register size of 1 byte instead of 6 bits. It's still under development, but the main concept is implemented, just needs optimizations.
