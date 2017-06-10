@@ -3,9 +3,8 @@ package vhll
 import (
 	"errors"
 	"math"
-	"strconv"
 
-	"github.com/dgryski/go-spooky"
+	metro "github.com/dgryski/go-metro"
 )
 
 var (
@@ -155,10 +154,8 @@ func (vhll *VirtualHyperLogLog) Reset() {
 	vhll.registers.reset()
 }
 
-func (vhll *VirtualHyperLogLog) getPhysicalRegisterFromVirtualRegister(id []byte, virtual uint) uint {
-	idx := uint(spooky.Hash64(id))
-	n := (idx+13)*104729 + virtual
-	h1 := spooky.Hash64([]byte(strconv.Itoa(int(n))))
+func (vhll *VirtualHyperLogLog) getPhysicalRegisterFromVirtualRegister(id []byte, virtual uint64) uint {
+	h1 := uint(metro.Hash64(id, virtual))
 	return uint((uint(h1) & 0xFFFFFFFFFFFF) % vhll.physicalM)
 }
 
@@ -167,10 +164,10 @@ Add pushes data to the vritual hyperloglog of a flow 'id'
 */
 func (vhll *VirtualHyperLogLog) Add(id []byte, data []byte) bool {
 	data = append(data, id...)
-	h1 := spooky.Hash64(data)
+	h1 := metro.Hash64(data, 42)
 	virtualRegister := h1 >> (64 - vhll.virtualLog2m)
 	r := getLeadingZeros(((h1<<vhll.virtualLog2m)|(1<<(vhll.virtualLog2m-1))+1)+1, 32)
-	physicalRegister := vhll.getPhysicalRegisterFromVirtualRegister(id, uint(virtualRegister))
+	physicalRegister := vhll.getPhysicalRegisterFromVirtualRegister(id, virtualRegister)
 	return vhll.registers.updateIfGreater(physicalRegister, r)
 }
 
@@ -212,12 +209,11 @@ func (vhll *VirtualHyperLogLog) getNoiseMean() float64 {
 GetCardinality return the cardinality of a flow 'id'
 */
 func (vhll *VirtualHyperLogLog) GetCardinality(id []byte) float64 {
-
 	physicalCardinality := vhll.GetTotalCardinality()
 	registerSum := float64(0)
 	zeros := float64(0)
 	for j := uint(0); j < vhll.virtualM; j++ {
-		phyReg := vhll.getPhysicalRegisterFromVirtualRegister(id, j)
+		phyReg := vhll.getPhysicalRegisterFromVirtualRegister(id, uint64(j))
 		val := vhll.registers.get(phyReg)
 		registerSum += 1.0 / float64(uint(1)<<val)
 		if val == 0 {
