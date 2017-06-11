@@ -6,12 +6,13 @@ import (
 )
 
 func TestVHLL(t *testing.T) {
-	vhll, _ := NewForLog2m(20)
+
+	vhll, _ := NewVHLL(18, 12)
 	for i := uint(0); i <= 1000000; i++ {
 		for j := uint(1); j <= 5; j++ {
 			if i%j == 0 {
 				id := []byte(strconv.Itoa(int(j)))
-				vhll.Add([]byte(id), []byte(strconv.Itoa(int(i))))
+				vhll.Insert([]byte(id), []byte(strconv.Itoa(int(i))))
 			}
 		}
 	}
@@ -25,18 +26,10 @@ func TestVHLL(t *testing.T) {
 
 	for j := uint(1); j <= 5; j++ {
 		id := []byte(strconv.Itoa(int(j)))
-		card := float64(vhll.GetCardinality(id))
-		offset := 100 * (card - float64(expected[j])) / float64(expected[j])
-		if offset > 4 || offset < -4 {
-			t.Error("Expected error < 4 percent, got", offset,
-				", expected count for", j, "=", expected[j], "got", card)
+		card := float64(vhll.Estimate(id))
+		p4 := float64(4 * card / 100)
+		if float64(card) > float64(expected[j])+p4 || float64(card) < float64(expected[j])-p4 {
+			t.Error("Expected error < 4 percent, got count for", j, "=", expected[j], "got", card)
 		}
 	}
-	//fmt.Println(vhll.GetTotalCardinality())
-	/*
-		totalOffset := 100 * (float64(vhll.GetTotalCardinality()) - float64(10000000)) / float64(10000000)
-		if totalOffset > 13 || totalOffset < -13 {
-			t.Error("Expected error < 13 percent, got", totalOffset, vhll.GetTotalCardinality())
-		}
-	*/
 }
